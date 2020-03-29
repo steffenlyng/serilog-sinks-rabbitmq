@@ -23,27 +23,37 @@ using System.Threading.Tasks;
 namespace Serilog.Sinks.RabbitMQ
 {
     /// <summary>
+    /// Builds a routing key for a <see cref="LogEvent"/>.
+    /// </summary>
+    /// <param name="logEvent">The log event to build the routing key for.</param>
+    public delegate string BuildRoutingKey(LogEvent logEvent);
+
+    /// <summary>
     /// Serilog RabbitMq Sink - Lets you log to RabbitMq using Serilog
     /// </summary>
     public class RabbitMQSink : PeriodicBatchingSink
     {
         private readonly ITextFormatter _formatter;
         private readonly RabbitMQClient _client;
+        private readonly BuildRoutingKey _buildRoutingKey;
 
         public RabbitMQSink(RabbitMQClientConfiguration configuration,
             RabbitMQSinkConfiguration rabbitMQSinkConfiguration) : base(rabbitMQSinkConfiguration.BatchPostingLimit, rabbitMQSinkConfiguration.Period)
         {
             _formatter = rabbitMQSinkConfiguration.TextFormatter;
             _client = new RabbitMQClient(configuration);
+            _buildRoutingKey = rabbitMQSinkConfiguration.BuildRoutingKey;
         }
 
         protected override async Task EmitBatchAsync(IEnumerable<LogEvent> events)
         {
             foreach (var logEvent in events)
             {
+                var routingKey = _buildRoutingKey?.Invoke(logEvent);
+
                 var sw = new StringWriter();
                 _formatter.Format(logEvent, sw);
-                await _client.PublishAsync(sw.ToString());
+                await _client.PublishAsync(sw.ToString(), routingKey);
             }
         }
 
